@@ -1,0 +1,247 @@
+#!/usr/bin/env escript
+%%%-------------------------------------------------------------------
+%%% @author falood <falood@gmail.com>
+%%% @copyright (C) 2012, falood
+%%% @doc
+%%% CMM 语言语法分析程序
+%%% 文法描述如下
+%%% program->
+%%%     (statement)*
+%%% statement->
+%%%     IfStatement
+%%%   | WhileStatement
+%%%   | AssignStatement
+%%%   | ReadStatement
+%%%   | WriteStatement
+%%%   | ComplexStatement
+%%%   | DefineStatement
+%%% DefineStatement-> (<INT>|<REAL>)Identifier ["=" <INTEGER>|<REAL> ]";"
+%%% IfStatement-> <IF> "(" Condition ")" Statement [<ELSE>Statement]
+%%% WhileStatement-> <WHILE>"("Condition")"Statement
+%%% AssignStatement-> (Identifier "=")+ Expression ";"
+%%% ReadStatement-> <READ> "(" <IDENTIFY> ")" ";"
+%%% WriteStatement-> <WRITE>"(" <EXPRESSION> ")" ";"
+%%% ComplexStatement-> "{" Statement  (Statement() )*  "}"
+%%% ArrayStatement-> "[" Expression() "]"
+%%% Condition-> Expression <COMPARATION> Expression
+%%% Expression-> Term() (<ADDOP> Term() )*
+%%% Term-> Factor() (<MULOP> Factor() )*
+%%% Factor-> [+|-]"(" Expression() ")" | Integer() | Real() | Identify()
+%%% Integer-> <INTEGER>
+%%% Real-> <REAL>
+%%% Identify-> <IDENTIFY> ([ ArrayStatement ])*
+%%% 最终输出的语法树结构如下
+%%% Program                    {psm, [Sm|T]}
+%%% IfStatement                {ism, Con, [Sm|T], [Sm|T]}
+%%% WhileStatement             {wsm, Con, [Sm|T]}
+%%% AssignStatement            {asm, Ide, Exp}
+%%% ReadStatement              {rsm, Exp}
+%%% WriteStatement             {tsm, Exp}
+%%% DefineStatement            {dsm, Type, Ide, Exp}
+%%% Condition                  {con, COM, Exp, Exp}
+%%% Expression                 {exp, OPT, Exp, Exp}
+%%%                            | {exp, int, DIG}
+%%%                            | {exp, real, DIG}
+%%%                            | {exp, ide, Ide}
+%%% Identify                   {ide, NAME}
+%%%                            | {ide, NAME, Exp}
+%%% @end
+%%% Created : 25 Sep 2012 by falood <falood@gmail.com>
+%%%-------------------------------------------------------------------
+%% -module(syn).
+%% -compile(export_all).
+usage() ->
+    S = "本程序为CMM语言语法分析程序，运行程序使用\nescript syn infile [-f outfile]",
+    io:format("~ts~n", [S]),
+    halt(1).
+
+main([]) ->
+    usage();
+main([IN_FILE|T]) ->
+    case fileread(IN_FILE) of
+        {ok, Tokens} ->
+            Tree = {psm, mulsyntax(Tokens)},
+            stdwrite(Tree),
+            case T of
+                ["-f", OUT_FILE] ->
+                    filewrite(Tree, OUT_FILE);
+                _ ->
+                 donothing       
+            end;
+        {error, _} ->
+            io:format("~p: No such file or directory~n", [IN_FILE])
+    end,
+    init:stop().
+
+fileread(IN_FILE) ->
+    case file:consult(IN_FILE) of
+        {ok, L} ->
+            {ok, L};
+        Error ->
+            Error
+    end.
+
+filewrite(Tree, OUT_FILE) ->
+    file:write_file(OUT_FILE, [], [write]), % 建立、清空输出文件
+    S = io_lib:format("~p~n", [Tree]),
+    file:write_file(OUT_FILE, S, [append]).
+
+stdwrite(Tree) ->
+    io:format("~p~n", [Tree]).
+
+%% 语法分析程序入口 syntax(Type, Currents, Tokens)
+syntax([{keyword, C, _Line}|_]=Tokens) when C=:="int"; C=:="real"-> % 变量定义
+    dsm(Tokens);
+syntax([{identify, _, _Line}|_]=Tokens) ->      % 赋值
+    asm(Tokens);
+syntax([{keyword, "read", _Line}|_]=Tokens) ->  % 读
+    rsm(Tokens);
+syntax([{keyword, "write", _Line}|_]=Tokens) -> % 写
+    tsm(Tokens);
+syntax([{keyword, "while", _Line}|_]=Tokens) -> % 循环
+    wsm(Tokens);
+syntax([{keyword, "if", _Line}|_]=Tokens) ->    % 分支
+    ism(Tokens);
+syntax([{separation, "{", _Line}|Tokens]) ->    % 左括号
+    mulsyntax(Tokens);
+syntax([{separation, ";", _Line}|Tokens]) ->    % 分号
+    {[], Tokens}.
+%% mulsyntax(Tokens) -> [syntax()] 
+mulsyntax(Tokens) ->
+    mulsyntax(Tokens, []).
+mulsyntax([], L) ->
+    lists:reverse(L);
+mulsyntax([{separation, "}", _Line}|Tokens], L) ->
+    {lists:reverse(L), Tokens};
+mulsyntax(Tokens, L) ->
+    case syntax(Tokens) of
+        {[], T1} ->
+            mulsyntax(T1, L);
+        {Syn, T1} ->
+            mulsyntax(T1, [Syn|L])
+    end.
+
+%% DEFINE BEGIN 处理变量定义
+dsm([{keyword, C, _Line}|T]) ->
+    Type = list_to_atom(C),
+    {Ide, T1} = ide(T),
+    case T1 of
+        [{operator, "=", _}|T2] ->
+            {Exp, T3} = exp(T2),
+            {{dsm, Type, Ide, Exp}, T3};
+        _ ->
+            {{dsm, Type, Ide}, T1}
+    end.
+%% END 处理变量定义
+
+%% READ BEGIN 处理读操作
+rsm([{keyword, "read", _Line}|T]) ->
+    {{exp, ide, Ide}, T1} = exp(T),
+    {{rsm, Ide}, T1}.
+%% END 处理读操作
+
+%% WRITE BEGIN 处理写操作
+tsm([{keyword, "write", _Line}|T]) ->
+    {Exp, T1} = exp(T),
+    {{tsm, Exp}, T1}.
+%% END 处理写操作
+
+%% ASSIGN BEGIN 处理赋值操作
+asm(T) ->
+    {Ide, [{operator, "=", _Line}|T1]} = ide(T),
+    {Exp, T2} = exp(T1),
+    {{asm, Ide, Exp}, T2}.
+%% END 处理赋值操作
+
+%% WHILE BEGIN 处理循环 while
+wsm([{keyword, "while", _Line}|T]) ->
+    {Con, T1} = exp(T),
+    {Syn, T2} = syntax(T1),
+    {{wsm, Con, Syn}, T2}.
+%% END 处理循环 while
+
+%% IF BEGIN 处理分支 if
+ism([{keyword, "if", _Line}|T]) ->
+    {Con, T1} = exp(T),
+    {Syn1, T2} = syntax(T1),
+    {Syn2, T4} = case T2 of
+                     [{keyword, "else", _}|T3] ->
+                         syntax(T3);
+                     _ ->
+                         {{}, T2}
+                 end,
+    {{ism, Con, Syn1, Syn2}, T4}.
+%% END 处理循环 while
+
+%% 获取读取一个变量
+ide([{identify, I, _Line}, {arraystart, "[", _Line}|T]) ->
+    {Exp, [{arrayend, "]", _Line}|T1]} = exp(T),
+    {{ide, I, Exp}, T1};
+ide([{identify, I, _Line}|T]) ->
+    {{ide, I}, T}.
+%% END 获取读取一个变量
+
+%% EXP TO TREE BEGIN 把后缀表达式转换成二叉树
+ext_to_tree(L) ->
+    ext_to_tree([], L).
+ext_to_tree([Stack], []) ->
+    Stack;
+ext_to_tree(Stack, [{exp, _, _}=Z|L]) ->
+    ext_to_tree([Z|Stack], L);
+ext_to_tree([E1, E2|Stack], [{opt, _}=Z|L]) ->
+    ext_to_tree([{exp, Z, E2, E1}|Stack], L);
+ext_to_tree([E1, E2|Stack], [{com, _}=Z|L]) ->
+    ext_to_tree([{con, Z, E2, E1}|Stack], L).
+%% END 把后缀表达式转换成二叉树
+    
+%% EXP BEGIN 读取表达式并转化为树
+exp(T) ->
+    exp(exp, [], [], T).
+%% exp/4 的四个参数分别是：表示类型(运算exp还是比较con)，当前堆栈，当前列表，剩余队列
+exp(exp, [], Currents, [{separation, _, _Line}|T]) ->
+    C = lists:reverse(Currents),
+    {ext_to_tree(C), T};
+exp(exp, [], Currents, [{arrayend, "]", _Line}|_]=T) ->
+    C = lists:reverse(Currents),
+    {ext_to_tree(C), T};
+exp(con, [], Currents, T) ->
+    C = lists:reverse(Currents),
+    {ext_to_tree(C), T};
+exp(exp, [SH|Stack], Currents,  [{separation, _, _Line}|_]=Z) ->
+    exp(exp, Stack, [SH|Currents], Z);
+%% 数字 和 变量 直接输出
+exp(Type, Stack, Currents, [{integer, I, _Line}|T]) ->
+    exp(Type, Stack, [{exp, int, I}|Currents], T);
+exp(Type, Stack, Currents, [{real, I, _Line}|T]) ->
+    exp(Type, Stack, [{exp, real, I}|Currents], T);
+exp(Type, Stack, Currents, [{identify, _, _Line}|_]=T) ->
+    {Ide, T1} = ide(T),
+    exp(Type, Stack, [{exp, ide, Ide}|Currents], T1);
+%% 左括号 ( 直接进栈
+exp(Type, Stack, Currents, [{parenthesis, "(", _Line}|T]) ->
+    exp(Type, [{opt, "("}|Stack], Currents, T);
+%% 右括号 ) 弹出栈符号，直到左括号
+exp(Type, [{opt, "("}|Stack], Currents, [{parenthesis, ")", _Line}|T]) ->
+    exp(Type, Stack, Currents, T);
+exp(Type, [SH|Stack], Currents, [{parenthesis, ")", _Line}|_T]=Z) ->
+    exp(Type, Stack, [SH|Currents], Z);
+%% 加减号 + -  弹出栈内的 + - * / 后把自己入栈
+exp(Type, [{opt, C}|Stack], Currents, [{computing, "+", _Line}|_T]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C}|Currents], Z);
+exp(Type, [{opt, C}|Stack], Currents, [{computing, "-", _Line}|_T]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C}|Currents], Z);
+exp(Type, Stack, Currents, [{computing, C, _Line}|T]) when C=="+"; C=="-" ->
+    exp(Type, [{opt, C}|Stack], Currents, T);
+%% 乘除号 * / 弹出栈内所有 + - * / 后把自己入栈
+exp(Type, [{opt, C}|Stack], Currents, [{computing, "/", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C}|Currents], Z);
+exp(Type, [{opt, C}|Stack], Currents, [{computing, "*", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C}|Currents], Z);
+exp(Type, Stack, Currents, [{computing, C, _Line}|T]) when C=="*"; C=="/" ->
+    exp(Type, [{opt, C}|Stack], Currents, T);
+%% 比较运算符 > < >= <= <>  弹出栈内所有 + - * / 后把自己入栈
+exp(Type, [{opt, C}|Stack], Currents, [{comparation, _, _Line}|_T]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C}|Currents], Z);
+exp(_Type, Stack, Currents, [{comparation, C, _Line}|T]) ->
+    exp(con, [{com, C}|Stack], Currents, T).
+%% BEGIN 读取表达式并转化为树
