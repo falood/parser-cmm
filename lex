@@ -44,12 +44,17 @@ fileread(FileName) ->
 filewrite(OUT_FILE) ->
     db ! {get, self()},
     receive
-        {Tokens, _Errors, _Ignores} ->
-            file:write_file(OUT_FILE, []), % 建立、清空输出文件
-            lists:map(fun(X) ->
-                              S = io_lib:format("~p.~n", [X]),
-                              file:write_file(OUT_FILE, S, [append])
-                      end, Tokens);
+        {Tokens, Errors, _Ignores} ->
+            case lists:flatlength(Errors) of 
+                0 ->
+                    file:write_file(OUT_FILE, []), % 建立、清空输出文件
+                    lists:map(fun(X) ->
+                                      S = io_lib:format("~p.~n", [X]),
+                                      file:write_file(OUT_FILE, S, [append])
+                              end, Tokens);
+                _ ->
+                    io:format("ERROR FOUND!NO OUTPUT FILE CREATED!~n")
+            end;
         Any ->
             io:format("RPC ERROR! GET ~p~n", [Any])
     end.
@@ -70,7 +75,7 @@ stdwrite() ->
                       end, Tokens),
             io:format("Ignore ~p: ~n", [LI]),
             lists:map(fun({Char, Line}) ->
-                              io:format("line ~p: ignore char ~c Error~n", [Line, Char])
+                              io:format("line ~p: ignore char \"~c\" Error~n", [Line, Char])
                       end, Ignores),
             io:format("Error ~p: ~n", [LE]),
             lists:map(fun({String, Line}) ->
@@ -81,7 +86,7 @@ stdwrite() ->
             io:format("RPC ERROR! GET ~p~n", [Any])
     end.
 
-%% commit 为处理函数，当 prelex 匹配到词之后会调用 commit 处理
+%% commit 为处理函数，当 lexical 匹配到词之后会调用 commit 处理
 commit({ok, _, _, _Line}=Z) ->
     db ! Z;
 commit({error, _, _Line}=Z) ->
@@ -132,7 +137,7 @@ commit({found, Type, CurrentS, LineNum}) ->
     commit({ok, Type, S, LineNum}),
     ok.
 
-%% prelex/4 为词法分析主函数，逐字分析，返回 Token 串
+%% lexical/4 为词法分析主函数，逐字分析，返回 Token 串
 lexical(S) ->
     lexical(none, [], 1, S).
 
@@ -155,7 +160,7 @@ lexical(comment, CurrentS, LineNum, [H|T]) ->
 %% 换行符
 lexical(Type, CurrentS, LineNum, [$\n|T])->
     commit({found, Type, CurrentS, LineNum}),
-    lexical(Type, CurrentS, LineNum + 1, T);
+    lexical(none, [], LineNum+1, T);
 
 %% 空白符
 lexical(Type, CurrentS, LineNum, [H|T]) when H == $\t;

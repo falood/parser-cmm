@@ -1,0 +1,29 @@
+Success 24, Errors 0, Ignores 0
+Success 24: 
+token type identify, token value is "b", line number is 2
+token type arraystart, token value is "[", line number is 2
+token type identify, token value is "n", line number is 2
+token type arrayend, token value is "]", line number is 2
+token type operator, token value is "=", line number is 2
+token type identify, token value is "a", line number is 2
+token type arraystart, token value is "[", line number is 2
+token type integer, token value is "2", line number is 2
+token type computing, token value is "+", line number is 2
+token type integer, token value is "2", line number is 2
+token type computing, token value is "*", line number is 2
+token type identify, token value is "b", line number is 2
+token type arraystart, token value is "[", line number is 2
+token type identify, token value is "c", line number is 2
+token type arraystart, token value is "[", line number is 2
+token type integer, token value is "3", line number is 2
+token type computing, token value is "-", line number is 2
+token type identify, token value is "i", line number is 2
+token type arrayend, token value is "]", line number is 2
+token type computing, token value is "/", line number is 2
+token type integer, token value is "3", line number is 2
+token type arrayend, token value is "]", line number is 2
+token type arrayend, token value is "]", line number is 2
+token type separation, token value is ";", line number is 2
+Ignore 0: 
+Error 0: 
+DONE

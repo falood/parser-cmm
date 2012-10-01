@@ -1,0 +1,39 @@
+/*
+   This is a bubble sort program.
+*/
+//begin
+int n;
+real a[128];
+real tmp;
+int i;
+int j;
+int k;
+read(n);
+if (n<128){
+    i=0;
+    while (i<n){
+        read(a[i]);
+        i=i+1;
+    }
+    i=0;
+    while(i<n-1){
+        j=i+1;
+        while(j<n){
+            if(a[j]<a[i]){
+                tmp=a[j];
+                a[j]=a[i];
+                a[i]=tmp;
+            }
+            j=j+1;
+        }
+        i=i+1;
+    }
+    i=0;
+    while(i<n){
+        write(a[i]);
+        i=i+1;
+    }
+}else{
+    write(128);
+}
+//end

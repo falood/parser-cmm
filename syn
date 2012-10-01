@@ -201,13 +201,15 @@ exp(T) ->
 exp(exp, [], Currents, [{separation, _, _Line}|T]) ->
     C = lists:reverse(Currents),
     {ext_to_tree(C), T};
-exp(exp, [], Currents, [{arrayend, "]", _Line}|_]=T) ->
+exp(exp, [], Currents, [{arrayend, "]", _Line}|_]=Z) ->
     C = lists:reverse(Currents),
-    {ext_to_tree(C), T};
+    {ext_to_tree(C), Z};
 exp(con, [], Currents, T) ->
     C = lists:reverse(Currents),
     {ext_to_tree(C), T};
 exp(exp, [SH|Stack], Currents,  [{separation, _, _Line}|_]=Z) ->
+    exp(exp, Stack, [SH|Currents], Z);
+exp(exp, [SH|Stack], Currents, [{arrayend, "]", _Line}|_]=Z) ->
     exp(exp, Stack, [SH|Currents], Z);
 %% 数字 和 变量 直接输出
 exp(Type, Stack, Currents, [{integer, I, _Line}|T]) ->
@@ -233,10 +235,13 @@ exp(Type, [{opt, C}|Stack], Currents, [{computing, "-", _Line}|_T]=Z) when C=:="
 exp(Type, Stack, Currents, [{computing, C, _Line}|T]) when C=="+"; C=="-" ->
     exp(Type, [{opt, C}|Stack], Currents, T);
 %% 乘除号 * / 弹出栈内所有 + - * / 后把自己入栈
-exp(Type, [{opt, C}|Stack], Currents, [{computing, "/", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
-    exp(Type, Stack, [{opt, C}|Currents], Z);
-exp(Type, [{opt, C}|Stack], Currents, [{computing, "*", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
-    exp(Type, Stack, [{opt, C}|Currents], Z);
+exp(Type, [{opt, C1}|Stack], Currents, [{computing, C2, _Line}|_T]=Z)
+  when (C1=:="*" orelse C1=:="/") andalso (C2=:="*" orelse C2=:="/") ->
+    exp(Type, Stack, [{opt, C1}|Currents], Z);
+%% exp(Type, [{opt, C}|Stack], Currents, [{computing, "/", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
+%%     exp(Type, Stack, [{opt, C}|Currents], Z);
+%% exp(Type, [{opt, C}|Stack], Currents, [{computing, "*", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
+%%     exp(Type, Stack, [{opt, C}|Currents], Z);
 exp(Type, Stack, Currents, [{computing, C, _Line}|T]) when C=="*"; C=="/" ->
     exp(Type, [{opt, C}|Stack], Currents, T);
 %% 比较运算符 > < >= <= <>  弹出栈内所有 + - * / 后把自己入栈
