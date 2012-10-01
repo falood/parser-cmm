@@ -148,9 +148,14 @@ tsm([{keyword, "write", _Line}|T]) ->
 
 %% ASSIGN BEGIN 处理赋值操作
 asm(T) ->
-    {Ide, [{operator, "=", _Line}|T1]} = ide(T),
-    {Exp, T2} = exp(T1),
-    {{asm, Ide, Exp}, T2}.
+    {Ide, T1} = ide(T),
+    case T1 of
+        [{operator, "=", _Line}|T2] ->
+            {Exp, T3} = exp(T2),
+            {{asm, Ide, Exp}, T3};
+        [H|_] ->
+            syn_error(H)
+    end.
 %% END 处理赋值操作
 
 %% WHILE BEGIN 处理循环 while
@@ -174,10 +179,10 @@ ism([{keyword, "if", _Line}|T]) ->
 %% END 处理循环 while
 
 %% 获取读取一个变量
-ide([{identify, I, _Line}, {arraystart, "[", _Line}|T]) ->
-    {Exp, [{arrayend, "]", _Line}|T1]} = exp(T),
+ide([{identify, I, _}, {arraystart, "[", _}|T]) ->
+    {Exp, [{arrayend, "]", _}|T1]} = exp(T),
     {{ide, I, Exp}, T1};
-ide([{identify, I, _Line}|T]) ->
+ide([{identify, I, _}|T]) ->
     {{ide, I}, T}.
 %% END 获取读取一个变量
 
@@ -188,65 +193,74 @@ ext_to_tree([Stack], []) ->
     Stack;
 ext_to_tree(Stack, [{exp, _, _}=Z|L]) ->
     ext_to_tree([Z|Stack], L);
-ext_to_tree([E1, E2|Stack], [{opt, _}=Z|L]) ->
+ext_to_tree([E1, E2|Stack], [{opt, _, _}=Z|L]) ->
     ext_to_tree([{exp, Z, E2, E1}|Stack], L);
-ext_to_tree([E1, E2|Stack], [{com, _}=Z|L]) ->
+ext_to_tree([E1, E2|Stack], [{com, _, _}=Z|L]) ->
     ext_to_tree([{con, Z, E2, E1}|Stack], L).
 %% END 把后缀表达式转换成二叉树
     
 %% EXP BEGIN 读取表达式并转化为树
-exp(T) ->
-    exp(exp, [], [], T).
+exp([{_, _, Line}|_]=T) ->
+    try exp(exp, [], [], T) of
+        V ->
+            V
+    catch
+        _:_ ->
+            syn_error({exp, "Expression Error", Line})
+    end.
 %% exp/4 的四个参数分别是：表示类型(运算exp还是比较con)，当前堆栈，当前列表，剩余队列
-exp(exp, [], Currents, [{separation, _, _Line}|T]) ->
+exp(exp, [], Currents, [{separation, _, _}|T]) ->
     C = lists:reverse(Currents),
     {ext_to_tree(C), T};
-exp(exp, [], Currents, [{arrayend, "]", _Line}|_]=Z) ->
+exp(exp, [], Currents, [{arrayend, "]", _}|_]=Z) ->
     C = lists:reverse(Currents),
     {ext_to_tree(C), Z};
 exp(con, [], Currents, T) ->
     C = lists:reverse(Currents),
     {ext_to_tree(C), T};
-exp(exp, [SH|Stack], Currents,  [{separation, _, _Line}|_]=Z) ->
+exp(exp, [SH|Stack], Currents,  [{separation, _, _}|_]=Z) ->
     exp(exp, Stack, [SH|Currents], Z);
-exp(exp, [SH|Stack], Currents, [{arrayend, "]", _Line}|_]=Z) ->
+exp(exp, [SH|Stack], Currents, [{arrayend, "]", _}|_]=Z) ->
     exp(exp, Stack, [SH|Currents], Z);
 %% 数字 和 变量 直接输出
-exp(Type, Stack, Currents, [{integer, I, _Line}|T]) ->
+exp(Type, Stack, Currents, [{integer, I, _}|T]) ->
     exp(Type, Stack, [{exp, int, I}|Currents], T);
-exp(Type, Stack, Currents, [{real, I, _Line}|T]) ->
+exp(Type, Stack, Currents, [{real, I, _}|T]) ->
     exp(Type, Stack, [{exp, real, I}|Currents], T);
-exp(Type, Stack, Currents, [{identify, _, _Line}|_]=T) ->
+exp(Type, Stack, Currents, [{identify, _, _}|_]=T) ->
     {Ide, T1} = ide(T),
     exp(Type, Stack, [{exp, ide, Ide}|Currents], T1);
 %% 左括号 ( 直接进栈
-exp(Type, Stack, Currents, [{parenthesis, "(", _Line}|T]) ->
-    exp(Type, [{opt, "("}|Stack], Currents, T);
+exp(Type, Stack, Currents, [{parenthesis, "(", Line}|T]) ->
+    exp(Type, [{opt, "(", Line}|Stack], Currents, T);
 %% 右括号 ) 弹出栈符号，直到左括号
-exp(Type, [{opt, "("}|Stack], Currents, [{parenthesis, ")", _Line}|T]) ->
+exp(Type, [{opt, "(", _}|Stack], Currents, [{parenthesis, ")", _}|T]) ->
     exp(Type, Stack, Currents, T);
-exp(Type, [SH|Stack], Currents, [{parenthesis, ")", _Line}|_T]=Z) ->
+exp(Type, [SH|Stack], Currents, [{parenthesis, ")", _}|_]=Z) ->
     exp(Type, Stack, [SH|Currents], Z);
 %% 加减号 + -  弹出栈内的 + - * / 后把自己入栈
-exp(Type, [{opt, C}|Stack], Currents, [{computing, "+", _Line}|_T]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
-    exp(Type, Stack, [{opt, C}|Currents], Z);
-exp(Type, [{opt, C}|Stack], Currents, [{computing, "-", _Line}|_T]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
-    exp(Type, Stack, [{opt, C}|Currents], Z);
-exp(Type, Stack, Currents, [{computing, C, _Line}|T]) when C=="+"; C=="-" ->
-    exp(Type, [{opt, C}|Stack], Currents, T);
+exp(Type, [{opt, C, Line}|Stack], Currents, [{computing, "+", _}|_]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C, Line}|Currents], Z);
+exp(Type, [{opt, C, Line}|Stack], Currents, [{computing, "-", _}|_]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C, Line}|Currents], Z);
+exp(Type, Stack, Currents, [{computing, C, Line}|T]) when C=="+"; C=="-" ->
+    exp(Type, [{opt, C, Line}|Stack], Currents, T);
 %% 乘除号 * / 弹出栈内所有 + - * / 后把自己入栈
-exp(Type, [{opt, C1}|Stack], Currents, [{computing, C2, _Line}|_T]=Z)
+exp(Type, [{opt, C1, Line}|Stack], Currents, [{computing, C2, _}|_]=Z)
   when (C1=:="*" orelse C1=:="/") andalso (C2=:="*" orelse C2=:="/") ->
-    exp(Type, Stack, [{opt, C1}|Currents], Z);
-%% exp(Type, [{opt, C}|Stack], Currents, [{computing, "/", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
-%%     exp(Type, Stack, [{opt, C}|Currents], Z);
-%% exp(Type, [{opt, C}|Stack], Currents, [{computing, "*", _Line}|_T]=Z) when C=:="*"; C=:="/" ->
-%%     exp(Type, Stack, [{opt, C}|Currents], Z);
-exp(Type, Stack, Currents, [{computing, C, _Line}|T]) when C=="*"; C=="/" ->
-    exp(Type, [{opt, C}|Stack], Currents, T);
+    exp(Type, Stack, [{opt, C1, Line}|Currents], Z);
+exp(Type, Stack, Currents, [{computing, C, Line}|T]) when C=="*"; C=="/" ->
+    exp(Type, [{opt, C, Line}|Stack], Currents, T);
 %% 比较运算符 > < >= <= <>  弹出栈内所有 + - * / 后把自己入栈
-exp(Type, [{opt, C}|Stack], Currents, [{comparation, _, _Line}|_T]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
-    exp(Type, Stack, [{opt, C}|Currents], Z);
-exp(_Type, Stack, Currents, [{comparation, C, _Line}|T]) ->
-    exp(con, [{com, C}|Stack], Currents, T).
+exp(Type, [{opt, C, Line}|Stack], Currents, [{comparation, _, _}|_]=Z) when C=:="+"; C=:="-"; C=:="*"; C=:="/" ->
+    exp(Type, Stack, [{opt, C, Line}|Currents], Z);
+exp(_Type, Stack, Currents, [{comparation, C, Line}|T]) ->
+    exp(con, [{com, C, Line}|Stack], Currents, T);
+%% 其它Token都是非法的
+exp(_Type, _Stack, _Currents, [H|_]) ->
+    syn_error(H).
 %% BEGIN 读取表达式并转化为树
+
+syn_error({_Type, String, Line}) ->
+    io:format("line ~p Error! ~p~n", [Line, String]),
+    halt(1).

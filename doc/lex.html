@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+               "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>词法分析实验报告</title>
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8"/>
+<meta name="title" content="词法分析实验报告"/>
+<meta name="generator" content="Org-mode"/>
+<meta name="generated" content="2012-10-01 17:10:06 CST"/>
+<meta name="author" content="郝向荣 2008302580047"/>
+<meta name="description" content=""/>
+<meta name="keywords" content=""/>
+<style type="text/css">
+ <!--/*--><![CDATA[/*><!--*/
+  html { font-family: Times, serif; font-size: 12pt; }
+  .title  { text-align: center; }
+  .todo   { color: red; }
+  .done   { color: green; }
+  .tag    { background-color: #add8e6; font-weight:normal }
+  .target { }
+  .timestamp { color: #bebebe; }
+  .timestamp-kwd { color: #5f9ea0; }
+  .right  {margin-left:auto; margin-right:0px;  text-align:right;}
+  .left   {margin-left:0px;  margin-right:auto; text-align:left;}
+  .center {margin-left:auto; margin-right:auto; text-align:center;}
+  p.verse { margin-left: 3% }
+  pre {
+	border: 1pt solid #AEBDCC;
+	background-color: #F3F5F7;
+	padding: 5pt;
+	font-family: courier, monospace;
+        font-size: 90%;
+        overflow:auto;
+  }
+  table { border-collapse: collapse; }
+  td, th { vertical-align: top;  }
+  th.right  { text-align:center;  }
+  th.left   { text-align:center;   }
+  th.center { text-align:center; }
+  td.right  { text-align:right;  }
+  td.left   { text-align:left;   }
+  td.center { text-align:center; }
+  dt { font-weight: bold; }
+  div.figure { padding: 0.5em; }
+  div.figure p { text-align: center; }
+  div.inlinetask {
+    padding:10px;
+    border:2px solid gray;
+    margin:10px;
+    background: #ffffcc;
+  }
+  textarea { overflow-x: auto; }
+  .linenr { font-size:smaller }
+  .code-highlighted {background-color:#ffff00;}
+  .org-info-js_info-navigation { border-style:none; }
+  #org-info-js_console-label { font-size:10px; font-weight:bold;
+                               white-space:nowrap; }
+  .org-info-js_search-highlight {background-color:#ffff00; color:#000000;
+                                 font-weight:bold; }
+  /*]]>*/-->
+</style>
+<script type="text/javascript">
+<!--/*--><![CDATA[/*><!--*/
+ function CodeHighlightOn(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(null != target) {
+     elem.cacheClassElem = elem.className;
+     elem.cacheClassTarget = target.className;
+     target.className = "code-highlighted";
+     elem.className   = "code-highlighted";
+   }
+ }
+ function CodeHighlightOff(elem, id)
+ {
+   var target = document.getElementById(id);
+   if(elem.cacheClassElem)
+     elem.className = elem.cacheClassElem;
+   if(elem.cacheClassTarget)
+     target.className = elem.cacheClassTarget;
+ }
+/*]]>*///-->
+</script>
+
+</head>
+<body>
+
+<div id="preamble">
+
+</div>
+
+<div id="content">
+<h1 class="title">词法分析实验报告</h1>
+
+
+<div id="table-of-contents">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents">
+<ul>
+<li><a href="#sec-1">1 识别的码表</a></li>
+<li><a href="#sec-2">2 程序结构、主要数据结构、算法说明</a></li>
+<li><a href="#sec-3">3 遇到问题、解决办法</a></li>
+<li><a href="#sec-4">4 存在问题</a></li>
+<li><a href="#sec-5">5 测试数据和结果说明</a></li>
+<li><a href="#sec-6">6 编译方法和说明</a></li>
+</ul>
+</div>
+</div>
+
+<div id="outline-container-1" class="outline-3">
+<h3 id="sec-1"><span class="section-number-3">1</span> 识别的码表</h3>
+<div class="outline-text-3" id="text-1">
+
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+<caption></caption>
+<colgroup><col class="left" /><col class="left" />
+</colgroup>
+<thead>
+<tr><th scope="col" class="left">类型</th><th scope="col" class="left">值</th></tr>
+</thead>
+<tbody>
+<tr><td class="left">关键字</td><td class="left">read write int real if else while</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">算术运算符</td><td class="left">+ - * /</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">赋值</td><td class="left">=</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">比较运算符</td><td class="left">== &gt;= &lt;= &gt; &lt; &lt;&gt;</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">小括号</td><td class="left">( )</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">中括号</td><td class="left">[ ]</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">分隔符</td><td class="left">;</td></tr>
+</tbody>
+<tbody>
+<tr><td class="left">变量</td><td class="left">包括字母数字下划线</td></tr>
+<tr><td class="left"></td><td class="left">以字母开头</td></tr>
+<tr><td class="left"></td><td class="left">字母或数字结尾</td></tr>
+</tbody>
+</table>
+
+</div>
+
+</div>
+
+<div id="outline-container-2" class="outline-3">
+<h3 id="sec-2"><span class="section-number-3">2</span> 程序结构、主要数据结构、算法说明</h3>
+<div class="outline-text-3" id="text-2">
+
+<ul>
+<li>程序结构请参见程序注释
+</li>
+<li>没用到独特数据结构，就用到普通数组
+</li>
+<li>使用尾递归实现分析过程，轻量级线程实现数据存储
+</li>
+</ul>
+
+</div>
+
+</div>
+
+<div id="outline-container-3" class="outline-3">
+<h3 id="sec-3"><span class="section-number-3">3</span> 遇到问题、解决办法</h3>
+<div class="outline-text-3" id="text-3">
+
+<p>未遇到问题
+</p></div>
+
+</div>
+
+<div id="outline-container-4" class="outline-3">
+<h3 id="sec-4"><span class="section-number-3">4</span> 存在问题</h3>
+<div class="outline-text-3" id="text-4">
+
+<p>识别的符号硬编码在程序中，未使用配置文件存放，不方便修改码表
+</p></div>
+
+</div>
+
+<div id="outline-container-5" class="outline-3">
+<h3 id="sec-5"><span class="section-number-3">5</span> 测试数据和结果说明</h3>
+<div class="outline-text-3" id="text-5">
+
+<ul>
+<li>测试数据存放在 examples 目录
+</li>
+<li>每组数据对应四个文件，惹词法分析出错，不生成 .tok 文件
+<ul>
+<li>.cmm CMM语言程序源码
+</li>
+<li>.out 词法分析的终端输出
+</li>
+<li>.tok 用于语法分析的 token 文件
+</li>
+<li>.tree 语法分析的语法树
+</li>
+</ul>
+
+</li>
+</ul>
+
+
+</div>
+
+</div>
+
+<div id="outline-container-6" class="outline-3">
+<h3 id="sec-6"><span class="section-number-3">6</span> 编译方法和说明</h3>
+<div class="outline-text-3" id="text-6">
+
+<ul>
+<li>程序使用 Erlang 语言编写，是脚本语言，不需要编译
+</li>
+<li>Erlang 环境可以从 <a href="http://www.erlang.org/download.html">http://www.erlang.org/download.html</a> 获取
+</li>
+<li>环境配置完成后使用 escript lex infile [-f outfile] 运行程序
+</li>
+</ul>
+
+</div>
+</div>
+</div>
+
+<div id="postamble">
+<p class="date">Date: 2012-10-01 17:10:06 CST</p>
+<p class="author">Author: 郝向荣 2008302580047</p>
+<p class="creator">Org version 7.8.11 with Emacs version 24</p>
+<a href="http://validator.w3.org/check?uri=referer">Validate XHTML 1.0</a>
+
+</div>
+</body>
+</html>
